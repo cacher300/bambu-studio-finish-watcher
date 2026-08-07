@@ -36,6 +36,8 @@ Capture the region once, display it, and print the OCR result:
 .\.venv\Scripts\python.exe .\bambu_watcher.py diagnostic --show
 ```
 
+The diagnostic command also minimizes PowerShell before capturing the screen. PowerShell remains minimized while the diagnostic image is displayed and returns after that window closes.
+
 Run the watcher in a visible console for testing:
 
 ```powershell

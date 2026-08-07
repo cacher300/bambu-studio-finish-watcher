@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
 import logging
 from logging.handlers import RotatingFileHandler
@@ -346,24 +347,39 @@ def play_audio(path: Path) -> None:
             winmm.mciSendStringW(f"close {alias}", None, 0, None)
 
 
-def calibrate(config: dict[str, Any], config_path: Path) -> None:
+@contextmanager
+def minimized_terminal():
+    """Minimize the visible terminal around screen capture and UI display."""
     import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    user32 = ctypes.windll.user32
+    kernel32.GetConsoleWindow.restype = ctypes.c_void_p
+    user32.GetForegroundWindow.restype = ctypes.c_void_p
+    user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
+    # Windows Terminal uses a pseudoconsole, so GetConsoleWindow may not be the
+    # visible window. The foreground HWND is the terminal when a CLI command
+    # starts and is therefore the reliable first choice.
+    window = user32.GetForegroundWindow() or kernel32.GetConsoleWindow()
+    if window:
+        user32.ShowWindow(window, 6)  # SW_MINIMIZE
+        time.sleep(1.0)
+    try:
+        yield
+    finally:
+        if window:
+            user32.ShowWindow(window, 9)  # SW_RESTORE
+
+
+def calibrate(config: dict[str, Any], config_path: Path) -> None:
     import cv2
     import numpy as np
     from mss import MSS
 
     screen_number = int(config["screen_number"])
     monitor = monitor_definition(screen_number)
-    kernel32 = ctypes.windll.kernel32
-    user32 = ctypes.windll.user32
-    kernel32.GetConsoleWindow.restype = ctypes.c_void_p
-    user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
-    console_window = kernel32.GetConsoleWindow()
-    if console_window:
-        # Minimize before capture so the setup console cannot cover Bambu Studio.
-        user32.ShowWindow(console_window, 6)  # SW_MINIMIZE
-        time.sleep(0.75)
-    try:
+    with minimized_terminal():
         with MSS() as capture:
             screenshot = np.asarray(capture.grab(monitor))
         frame = cv2.cvtColor(screenshot, cv2.COLOR_BGRA2BGR)
@@ -373,9 +389,6 @@ def calibrate(config: dict[str, Any], config_path: Path) -> None:
         print("Draw a box around the Bambu Studio status text, then press ENTER or SPACE.")
         x, y, w, h = cv2.selectROI("Bambu Watcher Calibration", preview, False, False)
         cv2.destroyAllWindows()
-    finally:
-        if console_window:
-            user32.ShowWindow(console_window, 9)  # SW_RESTORE
     if w == 0 or h == 0:
         raise RuntimeError("Calibration cancelled; configuration was not changed")
     config["capture_region"] = {
@@ -395,21 +408,22 @@ def diagnostic(config: dict[str, Any], config_path: Path, show: bool) -> int:
 
     validate_config(config, config_path)
     discover_tesseract(config)
-    frame = capture_region(config)
-    result = recognize(frame, config)
-    category, active_score, finished_score = classify(result, config)
-    output_path = resolve_path(str(config.get("diagnostic_image_path", "diagnostic-capture.png")), config_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    cv2.imwrite(str(output_path), frame)
+    with minimized_terminal():
+        frame = capture_region(config)
+        result = recognize(frame, config)
+        category, active_score, finished_score = classify(result, config)
+        output_path = resolve_path(str(config.get("diagnostic_image_path", "diagnostic-capture.png")), config_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(output_path), frame)
+        if show:
+            cv2.imshow("Bambu Watcher Diagnostic (press any key to close)", frame)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
     print(f"OCR text: {result.text!r}")
     print(f"OCR confidence: {result.confidence:.1f}")
     print(f"Classification: {category}")
     print(f"Printing score: {active_score:.1f}; Finished score: {finished_score:.1f}")
     print(f"Capture saved to: {output_path}")
-    if show:
-        cv2.imshow("Bambu Watcher Diagnostic (press any key to close)", frame)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
     return 0
 
 
