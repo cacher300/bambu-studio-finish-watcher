@@ -9,11 +9,13 @@ from bambu_watcher import (
     Detection,
     PersistentState,
     PrintStateMachine,
+    audio_path_from_config,
     classify,
     load_state,
     normalize_text,
     phrase_score,
     save_state,
+    validate_audio_file,
 )
 
 
@@ -103,6 +105,27 @@ class PersistenceTests(unittest.TestCase):
             loaded = load_state(path, logging.getLogger("test"))
             self.assertEqual(loaded, PersistentState("printing", 1))
             self.assertEqual(json.loads(path.read_text())["state"], "printing")
+
+
+class AudioConfigurationTests(unittest.TestCase):
+    def test_mp3_and_wav_are_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for filename in ("alert.mp3", "alert.wav"):
+                path = Path(directory) / filename
+                path.touch()
+                validate_audio_file(path)
+
+    def test_unsupported_audio_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "alert.ogg"
+            path.touch()
+            with self.assertRaisesRegex(ValueError, "wav or .mp3"):
+                validate_audio_file(path)
+
+    def test_legacy_wav_path_remains_compatible(self):
+        config_path = Path("C:/watcher/config.json")
+        resolved = audio_path_from_config({"wav_path": "alert.wav"}, config_path)
+        self.assertEqual(resolved, Path("C:/watcher/alert.wav"))
 
 
 if __name__ == "__main__":

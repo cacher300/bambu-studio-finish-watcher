@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$WavPath,
+    [Alias("WavPath")]
+    [string]$AudioPath,
     [switch]$SkipCalibration,
     [switch]$SkipTaskRegistration
 )
@@ -42,19 +43,20 @@ if (-not (Test-Path -LiteralPath $Config)) {
     Copy-Item -LiteralPath $ExampleConfig -Destination $Config
 }
 
-if (-not $WavPath) {
-    $WavPath = Read-Host "Enter the full path to your .wav alert sound"
+if (-not $AudioPath) {
+    $AudioPath = Read-Host "Enter the full path to your .wav or .mp3 alert sound"
 }
-$ResolvedWav = $null
-if ($WavPath) {
-    $ResolvedWav = Resolve-Path -LiteralPath $WavPath -ErrorAction SilentlyContinue
+$ResolvedAudio = $null
+if ($AudioPath) {
+    $ResolvedAudio = Resolve-Path -LiteralPath $AudioPath -ErrorAction SilentlyContinue
 }
-if (-not $ResolvedWav -or [IO.Path]::GetExtension($ResolvedWav.Path) -ine ".wav") {
-    throw "The alert sound must be an existing .wav file."
+$AudioExtension = if ($ResolvedAudio) { [IO.Path]::GetExtension($ResolvedAudio.Path).ToLowerInvariant() } else { "" }
+if (-not $ResolvedAudio -or $AudioExtension -notin @(".wav", ".mp3")) {
+    throw "The alert sound must be an existing .wav or .mp3 file."
 }
 
 $ConfigData = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
-$ConfigData.wav_path = $ResolvedWav.Path
+$ConfigData | Add-Member -NotePropertyName audio_path -NotePropertyValue $ResolvedAudio.Path -Force
 $CommonTesseract = "C:\Program Files\Tesseract-OCR\tesseract.exe"
 if (Test-Path -LiteralPath $CommonTesseract) {
     $ConfigData.tesseract_path = $CommonTesseract

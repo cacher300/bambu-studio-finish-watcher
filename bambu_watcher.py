@@ -16,6 +16,7 @@ from typing import Any, Callable
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = APP_DIR / "config.json"
+SUPPORTED_AUDIO_SUFFIXES = {".wav", ".mp3"}
 
 
 def normalize_text(value: str) -> str:
@@ -125,6 +126,21 @@ def resolve_path(value: str, config_path: Path) -> Path:
     return path if path.is_absolute() else (config_path.parent / path).resolve()
 
 
+def audio_path_from_config(config: dict[str, Any], config_path: Path) -> Path:
+    """Resolve the preferred audio_path key or the legacy wav_path key."""
+    value = str(config.get("audio_path", config.get("wav_path", ""))).strip()
+    if not value:
+        raise ValueError("audio_path is empty; set it to an absolute .wav or .mp3 file path")
+    return resolve_path(value, config_path)
+
+
+def validate_audio_file(path: Path) -> None:
+    if path.suffix.casefold() not in SUPPORTED_AUDIO_SUFFIXES:
+        raise ValueError(f"Alert sound must be a .wav or .mp3 file: {path}")
+    if not path.is_file():
+        raise ValueError(f"Alert sound file does not exist: {path}")
+
+
 def validate_config(config: dict[str, Any], config_path: Path, require_region: bool = True) -> None:
     required = [
         "screen_number",
@@ -134,7 +150,6 @@ def validate_config(config: dict[str, Any], config_path: Path, require_region: b
         "completion_phrase",
         "similarity_threshold",
         "required_completion_matches",
-        "wav_path",
         "log_path",
         "state_path",
     ]
@@ -156,11 +171,7 @@ def validate_config(config: dict[str, Any], config_path: Path, require_region: b
             raise ValueError("capture_region is not calibrated; run the calibrate command")
         if any(k not in region for k in ("left", "top")):
             raise ValueError("capture_region must contain left, top, width, and height")
-    wav_path = resolve_path(str(config["wav_path"]), config_path)
-    if not str(config["wav_path"]).strip():
-        raise ValueError("wav_path is empty; set it to an absolute .wav file path")
-    if wav_path.suffix.casefold() != ".wav" or not wav_path.is_file():
-        raise ValueError(f"WAV file does not exist or is not a .wav file: {wav_path}")
+    validate_audio_file(audio_path_from_config(config, config_path))
 
 
 def setup_logging(config: dict[str, Any], config_path: Path, console: bool) -> logging.Logger:
@@ -304,10 +315,35 @@ def classify(detection: Detection, config: dict[str, Any]) -> tuple[str, float, 
     return "other", active_score, finished_score
 
 
-def play_wav(path: Path) -> None:
-    import winsound
+def play_audio(path: Path) -> None:
+    """Play WAV through winsound or MP3 through Windows Media Control Interface."""
+    if path.suffix.casefold() == ".wav":
+        import winsound
 
-    winsound.PlaySound(str(path), winsound.SND_FILENAME)
+        winsound.PlaySound(str(path), winsound.SND_FILENAME)
+        return
+
+    import ctypes
+    import uuid
+
+    alias = "bambu_alert_" + uuid.uuid4().hex
+    winmm = ctypes.windll.winmm
+
+    def mci(command: str) -> None:
+        result = winmm.mciSendStringW(command, None, 0, None)
+        if result:
+            message = ctypes.create_unicode_buffer(256)
+            winmm.mciGetErrorStringW(result, message, len(message))
+            raise RuntimeError(f"Windows could not play {path.name}: {message.value or result}")
+
+    opened = False
+    try:
+        mci(f'open "{path}" type mpegvideo alias {alias}')
+        opened = True
+        mci(f"play {alias} wait")
+    finally:
+        if opened:
+            winmm.mciSendStringW(f"close {alias}", None, 0, None)
 
 
 def calibrate(config: dict[str, Any], config_path: Path) -> None:
@@ -369,11 +405,11 @@ def watch(config: dict[str, Any], config_path: Path, once: bool = False) -> int:
     # pythonw.exe has no stdout; regular Python should remain observable.
     logger = setup_logging(config, config_path, console=sys.stdout is not None)
     state_path = resolve_path(str(config["state_path"]), config_path)
-    wav_path = resolve_path(str(config["wav_path"]), config_path)
+    audio_path = audio_path_from_config(config, config_path)
     machine = PrintStateMachine(
         load_state(state_path, logger),
         int(config["required_completion_matches"]),
-        lambda: play_wav(wav_path),
+        lambda: play_audio(audio_path),
         lambda state: save_state(state_path, state),
         logger,
     )
@@ -430,7 +466,7 @@ def main() -> int:
         validate_config(config, config_path)
         discover_tesseract(config)
         monitor_definition(int(config["screen_number"]))
-        print("Configuration, Tesseract, monitor, and WAV file are valid.")
+        print("Configuration, Tesseract, monitor, and alert sound are valid.")
         return 0
     except Exception as exc:
         # Startup errors must remain visible when launched by pythonw.exe, which

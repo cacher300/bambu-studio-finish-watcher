@@ -13,7 +13,7 @@
   "required_completion_matches": 2,
   "minimum_ocr_confidence": 25,
   "minimum_image_stddev": 3,
-  "wav_path": "C:\\Path\\To\\your-alert.wav",
+  "audio_path": "C:\\Path\\To\\your-alert.mp3",
   "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
   "log_path": "logs\\bambu-watcher.log",
   "state_path": "data\\state.json",

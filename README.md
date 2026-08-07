@@ -1,13 +1,13 @@
 # Bambu Studio Print-Finish Watcher
 
-This Windows utility watches a fixed Bambu Studio status area and plays a WAV file once after it sees `Printing` change to `Finished`. It does not connect to the printer or the Bambu account.
+This Windows utility watches a fixed Bambu Studio status area and plays a WAV or MP3 file once after it sees `Printing` change to `Finished`. It does not connect to the printer or the Bambu account.
 
 ## Requirements
 
 - Windows 10 or 11
 - Python 3.11 or newer
 - [Tesseract OCR for Windows](https://github.com/UB-Mannheim/tesseract/wiki)
-- A `.wav` alert sound
+- A `.wav` or `.mp3` alert sound
 - Bambu Studio kept visible in the calibrated location while Windows remains unlocked
 
 ## Install
@@ -19,7 +19,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\setup.ps1
 ```
 
-The setup script creates `.venv`, installs the Python packages, asks for the WAV file, opens the calibration selector, validates the installation, and creates a scheduled task that runs at logon only in your interactive session.
+The setup script creates `.venv`, installs the Python packages, asks for the alert sound, opens the calibration selector, validates the installation, and creates a scheduled task that runs at logon only in your interactive session.
 
 During calibration, draw a tight rectangle around the text that displays `Printing` or `Finished`, then press Enter. If the status is elsewhere or the display layout changes, recalibrate:
 
