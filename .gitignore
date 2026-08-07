@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+config.json
+data/
+logs/
+diagnostic-capture.png

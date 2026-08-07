@@ -1,0 +1,21 @@
+{
+  "screen_number": 1,
+  "capture_region": {
+    "left": 0,
+    "top": 0,
+    "width": 0,
+    "height": 0
+  },
+  "poll_interval_seconds": 30,
+  "active_phrase": "Printing",
+  "completion_phrase": "Finished",
+  "similarity_threshold": 80,
+  "required_completion_matches": 2,
+  "minimum_ocr_confidence": 25,
+  "minimum_image_stddev": 3,
+  "wav_path": "C:\\Path\\To\\your-alert.wav",
+  "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+  "log_path": "logs\\bambu-watcher.log",
+  "state_path": "data\\state.json",
+  "diagnostic_image_path": "diagnostic-capture.png"
+}
