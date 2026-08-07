@@ -86,6 +86,15 @@ class MatchingTests(unittest.TestCase):
     def test_fuzzy_matching_tolerates_one_bad_character(self):
         self.assertGreaterEqual(phrase_score("Status: Fin1shed", "Finished"), 80)
 
+    def test_finish_time_does_not_match_finished(self):
+        self.assertEqual(phrase_score("Estimated finish time: 16:49", "Finished"), 0)
+
+    def test_finishing_does_not_match_finished(self):
+        self.assertEqual(phrase_score("Print is finishing", "Finished"), 0)
+
+    def test_finished_status_still_matches(self):
+        self.assertEqual(phrase_score("Print Finished", "Finished"), 100)
+
     @patch("bambu_watcher.phrase_score")
     def test_classification_uses_scores(self, score):
         score.side_effect = [20, 95]

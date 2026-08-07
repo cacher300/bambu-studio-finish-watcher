@@ -27,15 +27,32 @@ def normalize_text(value: str) -> str:
 
 def phrase_score(text: str, phrase: str) -> float:
     """Return a 0-100 fuzzy score for a phrase within OCR text."""
-    from rapidfuzz.fuzz import partial_ratio
+    from rapidfuzz.fuzz import ratio
 
     normalized_text = normalize_text(text)
     normalized_phrase = normalize_text(phrase)
     if not normalized_text or not normalized_phrase:
         return 0.0
-    if normalized_phrase in normalized_text:
+    text_words = normalized_text.split()
+    phrase_words = normalized_phrase.split()
+    if phrase_words == text_words or normalized_phrase in (
+        " ".join(text_words[index : index + len(phrase_words)])
+        for index in range(len(text_words) - len(phrase_words) + 1)
+    ):
         return 100.0
-    return float(partial_ratio(normalized_phrase, normalized_text))
+
+    # Compare phrase-sized word windows rather than arbitrary substrings. For a
+    # single status word, requiring the same length prevents "finish" or
+    # "finishing" from being mistaken for "finished", while still tolerating
+    # substitutions such as OCR reading "Fin1shed".
+    candidates = [
+        " ".join(text_words[index : index + len(phrase_words)])
+        for index in range(len(text_words) - len(phrase_words) + 1)
+    ]
+    same_length = [candidate for candidate in candidates if len(candidate) == len(normalized_phrase)]
+    if not same_length:
+        return 0.0
+    return max(float(ratio(normalized_phrase, candidate)) for candidate in same_length)
 
 
 @dataclass
