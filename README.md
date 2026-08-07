@@ -6,9 +6,10 @@ This Windows utility watches a fixed Bambu Studio status area and plays a WAV or
 
 - Windows 10 or 11
 - Python 3.11 or newer
-- [Tesseract OCR for Windows](https://github.com/UB-Mannheim/tesseract/wiki)
 - A `.wav` or `.mp3` alert sound
 - Bambu Studio kept visible in the calibrated location while Windows remains unlocked
+
+Tesseract OCR is installed automatically through Windows Package Manager (`winget`) when it is missing. If `winget` is unavailable, install [Tesseract OCR for Windows](https://github.com/UB-Mannheim/tesseract/wiki) manually.
 
 ## Install
 
@@ -19,9 +20,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\setup.ps1
 ```
 
-The setup script creates `.venv`, installs the Python packages, asks for the alert sound, opens the calibration selector, validates the installation, and creates a scheduled task that runs at logon only in your interactive session.
+The setup script creates `.venv`, installs the Python packages, installs Tesseract when needed, asks for the alert sound, opens the calibration selector, validates the installation, and creates a scheduled task that runs at logon only in your interactive session. It reuses a previously configured sound when setup is rerun.
 
-During calibration, draw a tight rectangle around the text that displays `Printing` or `Finished`, then press Enter. If the status is elsewhere or the display layout changes, recalibrate:
+During calibration, the PowerShell window minimizes before the screenshot is taken. Draw a tight rectangle around the text that displays `Printing` or `Finished`, then press Enter. PowerShell is restored afterward. If the status is elsewhere or the display layout changes, recalibrate:
 
 ```powershell
 .\.venv\Scripts\python.exe .\bambu_watcher.py calibrate
@@ -52,4 +53,5 @@ The default requires two consecutive `Finished` readings. At the 30-second polli
 - If diagnostic OCR is poor, select a tighter rectangle containing only the status text.
 - If you move Bambu Studio, change monitors, alter Windows display scaling, or change screen resolution, recalibrate.
 - The application must be visible and Windows must be unlocked. A minimized, covered, sleeping, or locked desktop cannot be read reliably.
+- If automatic Tesseract installation fails, run `winget install --id UB-Mannheim.TesseractOCR --exact` and rerun setup.
 - Check `logs\bambu-watcher.log` for captured text, confidence values, state changes, and errors.

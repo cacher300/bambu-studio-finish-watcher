@@ -236,9 +236,9 @@ def discover_tesseract(config: dict[str, Any]) -> None:
 
 
 def monitor_definition(screen_number: int) -> dict[str, int]:
-    from mss import mss
+    from mss import MSS
 
-    with mss() as capture:
+    with MSS() as capture:
         if screen_number >= len(capture.monitors):
             raise ValueError(
                 f"screen_number {screen_number} is unavailable; found {len(capture.monitors) - 1} monitor(s)"
@@ -249,7 +249,7 @@ def monitor_definition(screen_number: int) -> dict[str, int]:
 def capture_region(config: dict[str, Any]):
     import cv2
     import numpy as np
-    from mss import mss
+    from mss import MSS
 
     monitor = monitor_definition(int(config["screen_number"]))
     region = config["capture_region"]
@@ -259,7 +259,7 @@ def capture_region(config: dict[str, Any]):
         "width": int(region["width"]),
         "height": int(region["height"]),
     }
-    with mss() as capture:
+    with MSS() as capture:
         frame = np.asarray(capture.grab(absolute))
     return cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
 
@@ -347,21 +347,35 @@ def play_audio(path: Path) -> None:
 
 
 def calibrate(config: dict[str, Any], config_path: Path) -> None:
+    import ctypes
     import cv2
     import numpy as np
-    from mss import mss
+    from mss import MSS
 
     screen_number = int(config["screen_number"])
     monitor = monitor_definition(screen_number)
-    with mss() as capture:
-        screenshot = np.asarray(capture.grab(monitor))
-    frame = cv2.cvtColor(screenshot, cv2.COLOR_BGRA2BGR)
-    height, width = frame.shape[:2]
-    scale = min(1.0, 1600 / width, 900 / height)
-    preview = frame if scale == 1.0 else cv2.resize(frame, None, fx=scale, fy=scale)
-    print("Draw a box around the Bambu Studio status text, then press ENTER or SPACE.")
-    x, y, w, h = cv2.selectROI("Bambu Watcher Calibration", preview, False, False)
-    cv2.destroyAllWindows()
+    kernel32 = ctypes.windll.kernel32
+    user32 = ctypes.windll.user32
+    kernel32.GetConsoleWindow.restype = ctypes.c_void_p
+    user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    console_window = kernel32.GetConsoleWindow()
+    if console_window:
+        # Minimize before capture so the setup console cannot cover Bambu Studio.
+        user32.ShowWindow(console_window, 6)  # SW_MINIMIZE
+        time.sleep(0.75)
+    try:
+        with MSS() as capture:
+            screenshot = np.asarray(capture.grab(monitor))
+        frame = cv2.cvtColor(screenshot, cv2.COLOR_BGRA2BGR)
+        height, width = frame.shape[:2]
+        scale = min(1.0, 1600 / width, 900 / height)
+        preview = frame if scale == 1.0 else cv2.resize(frame, None, fx=scale, fy=scale)
+        print("Draw a box around the Bambu Studio status text, then press ENTER or SPACE.")
+        x, y, w, h = cv2.selectROI("Bambu Watcher Calibration", preview, False, False)
+        cv2.destroyAllWindows()
+    finally:
+        if console_window:
+            user32.ShowWindow(console_window, 9)  # SW_RESTORE
     if w == 0 or h == 0:
         raise RuntimeError("Calibration cancelled; configuration was not changed")
     config["capture_region"] = {

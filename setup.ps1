@@ -43,8 +43,15 @@ if (-not (Test-Path -LiteralPath $Config)) {
     Copy-Item -LiteralPath $ExampleConfig -Destination $Config
 }
 
+$ConfigData = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
 if (-not $AudioPath) {
-    $AudioPath = Read-Host "Enter the full path to your .wav or .mp3 alert sound"
+    $ConfiguredAudio = if ($ConfigData.audio_path) { $ConfigData.audio_path } elseif ($ConfigData.wav_path) { $ConfigData.wav_path } else { "" }
+    if ($ConfiguredAudio -and (Test-Path -LiteralPath $ConfiguredAudio)) {
+        $AudioPath = $ConfiguredAudio
+        Write-Host "Using configured alert sound: $AudioPath"
+    } else {
+        $AudioPath = Read-Host "Enter the full path to your .wav or .mp3 alert sound"
+    }
 }
 $ResolvedAudio = $null
 if ($AudioPath) {
@@ -55,13 +62,23 @@ if (-not $ResolvedAudio -or $AudioExtension -notin @(".wav", ".mp3")) {
     throw "The alert sound must be an existing .wav or .mp3 file."
 }
 
-$ConfigData = Get-Content -LiteralPath $Config -Raw | ConvertFrom-Json
 $ConfigData | Add-Member -NotePropertyName audio_path -NotePropertyValue $ResolvedAudio.Path -Force
 $CommonTesseract = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+if (-not (Test-Path -LiteralPath $CommonTesseract) -and -not (Get-Command tesseract.exe -ErrorAction SilentlyContinue)) {
+    $Winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+    if (-not $Winget) {
+        throw "Tesseract OCR is missing and winget is unavailable. Install Tesseract manually, then rerun setup.ps1."
+    }
+    Write-Host "Tesseract OCR was not found. Installing it with winget..."
+    & $Winget.Source install --id UB-Mannheim.TesseractOCR --exact --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        throw "The automatic Tesseract installation failed. Install UB-Mannheim.TesseractOCR manually, then rerun setup.ps1."
+    }
+}
 if (Test-Path -LiteralPath $CommonTesseract) {
     $ConfigData.tesseract_path = $CommonTesseract
 } elseif (-not (Get-Command tesseract.exe -ErrorAction SilentlyContinue)) {
-    throw "Tesseract OCR was not found. Install Tesseract for Windows, then rerun setup.ps1."
+    throw "Tesseract installation completed, but tesseract.exe could not be found. Reopen PowerShell and rerun setup.ps1."
 }
 $ConfigData | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $Config -Encoding utf8
 
